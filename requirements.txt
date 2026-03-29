@@ -1,0 +1,8 @@
+# No external dependencies required
+# Uses only Python standard library modules:
+# - argparse
+# - os
+# - pathlib
+# - re
+# - signal
+# - sys
