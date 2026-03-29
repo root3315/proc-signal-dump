@@ -12,6 +12,7 @@ import os
 import re
 import signal
 import sys
+import time
 from pathlib import Path
 
 
@@ -29,6 +30,9 @@ SIGNAL_NAMES = {
 SIG_DFL = 0
 SIG_IGN = 1
 SIG_HANDLER_CUSTOM = 2
+
+DEFAULT_RETRIES = 3
+DEFAULT_RETRY_DELAY = 0.1
 
 
 def get_signal_name(signum):
@@ -50,27 +54,44 @@ def parse_sig_mask(mask_str):
     return signals
 
 
-def read_proc_status(pid):
+def read_proc_file_with_retry(path, retries=DEFAULT_RETRIES, delay=DEFAULT_RETRY_DELAY):
+    """Read a proc file with retry logic for transient access failures."""
+    last_error = None
+    
+    for attempt in range(retries):
+        try:
+            with open(path, "r") as f:
+                return f.read()
+        except (PermissionError, ProcessLookupError, FileNotFoundError) as e:
+            last_error = e
+            if attempt < retries - 1:
+                time.sleep(delay)
+        except OSError as e:
+            last_error = e
+            if attempt < retries - 1:
+                time.sleep(delay)
+    
+    return None
+
+
+def read_proc_status(pid, retries=DEFAULT_RETRIES, delay=DEFAULT_RETRY_DELAY):
     """Read and parse /proc/[pid]/status file."""
     status_path = Path(f"/proc/{pid}/status")
-    if not status_path.exists():
+    
+    content = read_proc_file_with_retry(status_path, retries, delay)
+    if content is None:
         return None
 
     status = {}
-    try:
-        with open(status_path, "r") as f:
-            for line in f:
-                if ":" in line:
-                    key, value = line.split(":", 1)
-                    status[key.strip()] = value.strip()
-    except (PermissionError, ProcessLookupError) as e:
-        print(f"Error reading status: {e}", file=sys.stderr)
-        return None
+    for line in content.splitlines():
+        if ":" in line:
+            key, value = line.split(":", 1)
+            status[key.strip()] = value.strip()
 
     return status
 
 
-def read_proc_task_status(pid):
+def read_proc_task_status(pid, retries=DEFAULT_RETRIES, delay=DEFAULT_RETRY_DELAY):
     """Read signal handler info from /proc/[pid]/task/[tid]/status for all threads."""
     task_dir = Path(f"/proc/{pid}/task")
     if not task_dir.exists():
@@ -83,8 +104,16 @@ def read_proc_task_status(pid):
                 continue
 
             tid = int(task_entry.name)
-            task_status = read_proc_status(f"{pid}/task/{tid}")
-            if task_status:
+            task_status_path = Path(f"/proc/{pid}/task/{tid}/status")
+            content = read_proc_file_with_retry(task_status_path, retries, delay)
+            
+            if content:
+                task_status = {}
+                for line in content.splitlines():
+                    if ":" in line:
+                        key, value = line.split(":", 1)
+                        task_status[key.strip()] = value.strip()
+                
                 threads.append({
                     "tid": tid,
                     "name": task_status.get("Name", "unknown"),
@@ -99,15 +128,15 @@ def read_proc_task_status(pid):
     return threads
 
 
-def read_proc_cmdline(pid):
+def read_proc_cmdline(pid, retries=DEFAULT_RETRIES, delay=DEFAULT_RETRY_DELAY):
     """Read command line for a process."""
     cmdline_path = Path(f"/proc/{pid}/cmdline")
-    try:
-        with open(cmdline_path, "r") as f:
-            cmdline = f.read().replace("\x00", " ")
-            return cmdline.strip()
-    except (PermissionError, ProcessLookupError):
+    
+    content = read_proc_file_with_retry(cmdline_path, retries, delay)
+    if content is None:
         return "<unknown>"
+    
+    return content.replace("\x00", " ").strip()
 
 
 def analyze_signal_disposition(sig_catch, sig_ignore, signum):
