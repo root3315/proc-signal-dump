@@ -13,6 +13,7 @@ Ever had a process that just won't die when you send SIGTERM? Or maybe signals a
 - Shows pending signals waiting to be delivered
 - Optional thread-level signal mask inspection
 - Lists processes with custom signal handlers
+- JSON output format for programmatic use
 
 ## Usage
 
@@ -31,6 +32,12 @@ python3 proc_signal_dump.py --list --pattern python
 
 # Verbose mode with thread info
 python3 proc_signal_dump.py <pid> -v
+
+# JSON output
+python3 proc_signal_dump.py <pid> --json
+
+# JSON output with thread info
+python3 proc_signal_dump.py <pid> --json -v
 ```
 
 ## Example output
@@ -43,16 +50,42 @@ Command: python3 myapp.py --config prod.yaml
 
 Signal Dispositions:
 ------------------------------------------------------------
-Signal       Disposition  Blocked    Pending   
+Signal       Disposition  Blocked    Pending
 ------------------------------------------------------------
-SIGINT       handler      no         no        
-SIGTERM      handler      no         no        
-SIGCHLD      handler      no         no        
-SIGPIPE      ignore       no         no        
-SIGUSR1      handler      yes        no        
+SIGINT       handler      no         no
+SIGTERM      handler      no         no
+SIGCHLD      handler      no         no
+SIGPIPE      ignore       no         no
+SIGUSR1      handler      yes        no
 
 Custom handlers installed: SIGINT, SIGTERM, SIGCHLD, SIGUSR1
 Signals ignored: SIGPIPE
+```
+
+## JSON output example
+
+```json
+{
+  "process": {
+    "pid": 1234,
+    "name": "myapp",
+    "state": "S (sleeping)",
+    "command": "python3 myapp.py --config prod.yaml"
+  },
+  "signals": [
+    {
+      "signal": "SIGINT",
+      "number": 2,
+      "disposition": "handler",
+      "blocked": false,
+      "pending": false
+    }
+  ],
+  "summary": {
+    "custom_handlers": ["SIGINT", "SIGTERM", "SIGCHLD", "SIGUSR1"],
+    "ignored": ["SIGPIPE"]
+  }
+}
 ```
 
 ## How it works
