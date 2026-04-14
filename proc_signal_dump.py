@@ -209,7 +209,7 @@ def dump_process_signals(pid, verbose=False, json_output=False):
         blocked_str = "yes" if signum in blocked_set else "no"
         pending_str = "yes" if signum in pending_set else "no"
 
-        if disposition != SIG_DFL or blocked_set or pending_set or verbose:
+        if disposition != SIG_DFL or signum in blocked_set or signum in pending_set or verbose:
             print(f"{sig_name:<12} {disp_str:<12} {blocked_str:<10} {pending_str:<10}")
 
     print()
